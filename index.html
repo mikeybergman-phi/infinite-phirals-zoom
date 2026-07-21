@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Phi Nested Pattern Click-Zoom Spirals</title>
+<style>
+  :root{
+    color-scheme: dark;
+    --panel: rgba(10,12,18,.90);
+    --muted: rgba(210,220,240,.64);
+    --accent: #74efe6;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    width:100%;height:100%;margin:0;overflow:hidden;background:#000;
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  canvas{display:block;width:100%;height:100%;background:#000;cursor:crosshair}
+  #panel{
+    position:fixed;top:14px;left:14px;width:min(480px,calc(100vw - 28px));
+    max-height:calc(100vh - 28px);overflow:auto;
+    padding:14px;border:1px solid rgba(255,255,255,.14);border-radius:14px;
+    background:var(--panel);backdrop-filter:blur(14px);
+    box-shadow:0 14px 45px rgba(0,0,0,.42);
+    user-select:none; transition:opacity .18s ease,transform .18s ease;
+  }
+  #panel.hidden{opacity:0;pointer-events:none;transform:translateY(-8px)}
+  #panel.minimized{display:none}
+  #restoreBtn{
+    display:none;position:fixed;top:12px;left:12px;z-index:10;
+    width:44px;height:44px;padding:0;border-radius:12px;
+    border:1px solid rgba(255,255,255,.18);
+    background:rgba(10,12,18,.88);color:#fff;font-size:21px;
+    backdrop-filter:blur(12px);cursor:pointer;
+  }
+  #restoreBtn.show{display:block}
+  .panel-title{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:10px;
+  }
+  h1{margin:0 0 4px;font-size:17px}
+  .sub{margin:0 0 10px;color:var(--muted);font-size:12px;line-height:1.45}
+  .formula{
+    padding:9px 10px;margin-bottom:12px;border-radius:10px;
+    background:rgba(255,255,255,.045);color:rgba(235,241,255,.88);
+    font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .row{
+    display:grid;grid-template-columns:144px 1fr 62px;gap:8px;
+    align-items:center;margin:8px 0;font-size:12px;
+  }
+  .row output{
+    text-align:right;color:var(--accent);
+    font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  input[type="range"]{width:100%;accent-color:var(--accent)}
+  input[type="checkbox"]{accent-color:var(--accent)}
+  select{
+    width:100%;padding:7px 8px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.15);
+    background:rgba(255,255,255,.06);color:rgba(245,248,255,.95);
+  }
+  select option{background:#11131a;color:#fff}
+  .checks{
+    display:grid;grid-template-columns:1fr 1fr;gap:7px 10px;
+    margin-top:10px;font-size:12px;
+  }
+  label.check{display:flex;gap:7px;align-items:center;color:rgba(235,241,255,.84)}
+  .buttons{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px}
+  button{
+    border:1px solid rgba(255,255,255,.15);border-radius:9px;
+    background:rgba(255,255,255,.06);color:rgba(245,248,255,.9);
+    padding:8px 10px;font-weight:620;cursor:pointer;
+  }
+  button:hover{background:rgba(255,255,255,.10)}
+  .icon-button{
+    flex:0 0 auto;width:34px;height:30px;padding:0;border-radius:8px;
+    font-size:18px;line-height:1;
+  }
+  button.recording{
+    border-color:rgba(255,110,110,.8);
+    background:rgba(255,70,70,.18);
+  }
+  #status{margin-top:8px;color:rgba(210,220,240,.76);font-size:11px}
+  .hint{margin-top:8px;color:rgba(210,220,240,.52);font-size:10px;line-height:1.45}
+  @media (max-width:600px){
+    #panel{top:8px;left:8px;width:calc(100vw - 16px);max-height:calc(100vh - 16px)}
+    .row{grid-template-columns:128px 1fr 56px}
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<button id="restoreBtn" type="button" aria-label="Open controls">☰</button>
+
+<section id="panel">
+  <div class="panel-title">
+    <div>
+      <h1>Phi Nested Pattern Click-Zoom Spirals</h1>
+      <p class="sub">Choose the 60°, 90°, or 108° family. Each one uses the same 3-step method, click-to-retarget zooming, recursive branching, and the phi-scaled whole pattern repeating inward at φ⁻².</p>
+    </div>
+    <button id="minimizeBtn" class="icon-button" type="button" aria-label="Minimize controls">−</button>
+  </div>
+
+  <div class="formula">
+    mode = <span id="modeText">90° · 4-fold</span><br>
+    seed headings = <span id="seedText">θ, θ+90°, θ+180°, θ+270°</span><br>
+    whole-pattern copies = P, P/φ², P/φ⁴, P/φ⁶, ...<br>
+    continuation child: r → r/φ, heading = endHeading, chirality unchanged<br>
+    point-mirrored child: r → r/φ², heading = endHeading + 180°, chirality unchanged<br>
+    click canvas = retarget zoom center
+  </div>
+
+  <div class="row">
+    <label for="spiralMode">Spiral family</label>
+    <select id="spiralMode">
+      <option value="60">60° arcs · 6-fold</option>
+      <option value="90" selected>90° arcs · 4-fold</option>
+      <option value="108">108° arcs · 5-fold</option>
+    </select>
+    <output id="spiralModeOut">90°</output>
+  </div>
+
+  <div class="checks">
+    <label class="check"><input id="rainbow" type="checkbox"> Rainbow zoom</label>
+    <label class="check"><input id="showTarget" type="checkbox" checked> Show zoom target</label>
+  </div>
+
+  <div class="row">
+    <label for="speed">Zoom speed</label>
+    <input id="speed" type="range" min="0.05" max="1.50" step="0.01" value="0.34">
+    <output id="speedOut">0.34</output>
+  </div>
+
+  <div class="row">
+    <label for="localDepth">Base depth</label>
+    <input id="localDepth" type="range" min="2" max="24" step="1" value="10">
+    <output id="localDepthOut">10</output>
+  </div>
+
+  <div class="row">
+    <label for="lineWidth">Line width</label>
+    <input id="lineWidth" type="range" min="0.20" max="2.5" step="0.05" value="0.95">
+    <output id="lineWidthOut">0.95</output>
+  </div>
+
+  <div class="row">
+    <label for="minPix">Min pixels</label>
+    <input id="minPix" type="range" min="0.08" max="4.00" step="0.05" value="0.45">
+    <output id="minPixOut">0.45</output>
+  </div>
+
+  <div class="checks">
+    <label class="check"><input id="showGuide" type="checkbox"> Show 3-step guide (one arm)</label>
+    <label class="check"><input id="slowDepth" type="checkbox" checked> Match iteration to zoom</label>
+  </div>
+
+  <div class="buttons">
+    <button id="playPause" type="button">Pause</button>
+    <button id="reset" type="button">Reset position</button>
+    <button id="recordBtn" type="button">Record video</button>
+  </div>
+
+  <div id="status"></div>
+  <div class="hint">Reset returns the zoom center to the shared origin and restarts the zoom without changing your values. Space = pause/play · H = hide controls. Recording saves a WebM when stopped.</div>
+</section>
+
+<script>
+(() => {
+  "use strict";
+
+  const PHI = (1 + Math.sqrt(5)) / 2;
+  const LOG_PHI = Math.log(PHI);
+  const TAU = Math.PI * 2;
+  const DEG = Math.PI / 180;
+
+  const canvas = document.getElementById("canvas");
+  const ctx = canvas.getContext("2d", {alpha:false});
+  const panel = document.getElementById("panel");
+  const restoreBtn = document.getElementById("restoreBtn");
+
+  const ui = {
+    spiralMode: document.getElementById("spiralMode"),
+    spiralModeOut: document.getElementById("spiralModeOut"),
+    modeText: document.getElementById("modeText"),
+    seedText: document.getElementById("seedText"),
+    rainbow: document.getElementById("rainbow"),
+    showTarget: document.getElementById("showTarget"),
+    minimizeBtn: document.getElementById("minimizeBtn"),
+    recordBtn: document.getElementById("recordBtn"),
+    speed: document.getElementById("speed"),
+    localDepth: document.getElementById("localDepth"),
+    lineWidth: document.getElementById("lineWidth"),
+    minPix: document.getElementById("minPix"),
+    showGuide: document.getElementById("showGuide"),
+    slowDepth: document.getElementById("slowDepth"),
+    speedOut: document.getElementById("speedOut"),
+    localDepthOut: document.getElementById("localDepthOut"),
+    lineWidthOut: document.getElementById("lineWidthOut"),
+    minPixOut: document.getElementById("minPixOut"),
+    playPause: document.getElementById("playPause"),
+    reset: document.getElementById("reset"),
+    status: document.getElementById("status")
+  };
+
+  let cssW = 1, cssH = 1, dpr = 1;
+  let lastTime = performance.now();
+  let elapsed = 0;
+  let paused = false;
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recording = false;
+
+  let cameraX = 0;
+  let cameraY = 0;
+  let targetCameraX = 0;
+  let targetCameraY = 0;
+  let targetPulse = 0;
+
+  function getGeometry(){
+    const mode = ui.spiralMode.value;
+    if(mode === "60"){
+      return {
+        name: "60° · 6-fold",
+        sweepDeg: 60,
+        sweep: 60 * DEG,
+        rotStepDeg: 60,
+        rotStep: 60 * DEG,
+        seedCount: 6,
+        seedText: "θ, θ+60°, θ+120°, θ+180°, θ+240°, θ+300°",
+        rootRadius: 0.42,
+        baseScale: 185,
+        baseRotation: -30 * DEG
+      };
+    }
+    if(mode === "108"){
+      return {
+        name: "108° · 5-fold",
+        sweepDeg: 108,
+        sweep: 108 * DEG,
+        rotStepDeg: 72,
+        rotStep: 72 * DEG,
+        seedCount: 5,
+        seedText: "θ, θ+72°, θ+144°, θ+216°, θ+288°",
+        rootRadius: 0.38,
+        baseScale: 175,
+        baseRotation: -18 * DEG
+      };
+    }
+    return {
+      name: "90° · 4-fold",
+      sweepDeg: 90,
+      sweep: 90 * DEG,
+      rotStepDeg: 90,
+      rotStep: 90 * DEG,
+      seedCount: 4,
+      seedText: "θ, θ+90°, θ+180°, θ+270°",
+      rootRadius: 0.40,
+      baseScale: 185,
+      baseRotation: -20 * DEG
+    };
+  }
+
+  function updateOutputs(){
+    const g = getGeometry();
+    ui.spiralModeOut.value = `${g.sweepDeg}°`;
+    ui.modeText.textContent = g.name;
+    ui.seedText.textContent = g.seedText;
+    ui.speedOut.value = Number(ui.speed.value).toFixed(2);
+    ui.localDepthOut.value = ui.localDepth.value;
+    ui.lineWidthOut.value = Number(ui.lineWidth.value).toFixed(2);
+    ui.minPixOut.value = Number(ui.minPix.value).toFixed(2);
+    ui.playPause.textContent = paused ? "Play" : "Pause";
+  }
+
+  function currentScale(){
+    const g = getGeometry();
+    const zoomPow = elapsed * Number(ui.speed.value);
+    return g.baseScale * Math.pow(PHI, zoomPow);
+  }
+
+  function resize(){
+    cssW = innerWidth;
+    cssH = innerHeight;
+    dpr = Math.min(devicePixelRatio || 1, 2);
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    draw();
+  }
+
+  function toScreen(x, y, scale){
+    return {
+      x: cssW / 2 + (x - cameraX) * scale,
+      y: cssH / 2 - (y - cameraY) * scale
+    };
+  }
+
+  function screenToWorld(px, py, scale){
+    return {
+      x: cameraX + (px - cssW / 2) / scale,
+      y: cameraY - (py - cssH / 2) / scale
+    };
+  }
+
+  function getStrokeStyle(alpha, depthOffset, copyIndex, zoomPow){
+    if(!ui.rainbow.checked){
+      return `rgba(245,248,255,${alpha})`;
+    }
+    const baseHue = (zoomPow * 130) % 360;
+    const hue = (baseHue + depthOffset * 24 + copyIndex * 32) % 360;
+    return `hsla(${hue}, 95%, 70%, ${alpha})`;
+  }
+
+  function getArcGeometry(node, geometry){
+    const {x, y, r, heading, chirality} = node;
+    const nx = -Math.sin(heading);
+    const ny =  Math.cos(heading);
+    const cx = x + chirality * r * nx;
+    const cy = y + chirality * r * ny;
+    const startAngle = Math.atan2(y - cy, x - cx);
+    const sweep = chirality * geometry.sweep;
+    const endAngle = startAngle + sweep;
+
+    return {
+      cx,
+      cy,
+      startAngle,
+      sweep,
+      endX: cx + r * Math.cos(endAngle),
+      endY: cy + r * Math.sin(endAngle),
+      endHeading: heading + sweep
+    };
+  }
+
+  function subtreeMayReachViewport(node, scale){
+    const subtreeReach = 5.8 * node.r;
+    const viewportReach = 0.70 * Math.hypot(cssW, cssH) / scale;
+    const distance = Math.hypot(node.x - cameraX, node.y - cameraY);
+    return distance <= subtreeReach + viewportReach;
+  }
+
+  function arcMayIntersectViewport(node, geometry, scale){
+    const center = toScreen(geometry.cx, geometry.cy, scale);
+    const radiusPixels = node.r * scale;
+    const margin = 60;
+    return (
+      center.x + radiusPixels >= -margin &&
+      center.x - radiusPixels <= cssW + margin &&
+      center.y + radiusPixels >= -margin &&
+      center.y - radiusPixels <= cssH + margin
+    );
+  }
+
+  function drawArc(node, arc, scale, settings, geometry, zoomPow){
+    const {r, depth, maxDepth, copyIndex = 0} = node;
+    const radiusPixels = r * scale;
+    const samples = Math.max(20, Math.min(120, Math.ceil(radiusPixels / 28)));
+    const alpha = Math.max(0.10, 0.98 - 0.05 * (maxDepth - depth));
+
+    ctx.beginPath();
+    for(let i = 0; i <= samples; i++){
+      const a = arc.startAngle + arc.sweep * (i / samples);
+      const wx = arc.cx + r * Math.cos(a);
+      const wy = arc.cy + r * Math.sin(a);
+      const p = toScreen(wx, wy, scale);
+      if(i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    }
+
+    ctx.strokeStyle = getStrokeStyle(alpha, maxDepth - depth, copyIndex, zoomPow);
+    ctx.lineWidth = settings.lineWidth;
+    ctx.stroke();
+  }
+
+  function drawGuide(scale, geometry){
+    function q(x, y, heading, r, chirality, color){
+      const nx = -Math.sin(heading);
+      const ny =  Math.cos(heading);
+      const cx = x + chirality * r * nx;
+      const cy = y + chirality * r * ny;
+      const startAngle = Math.atan2(y - cy, x - cx);
+      const sweep = chirality * geometry.sweep;
+      const samples = 42;
+
+      ctx.beginPath();
+      for(let i = 0; i <= samples; i++){
+        const a = startAngle + sweep * (i / samples);
+        const wx = cx + r * Math.cos(a);
+        const wy = cy + r * Math.sin(a);
+        const p = toScreen(wx, wy, scale);
+        if(i === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.6, Number(ui.lineWidth.value) * 1.5);
+      ctx.stroke();
+
+      const endAngle = startAngle + sweep;
+      return {
+        endX: cx + r * Math.cos(endAngle),
+        endY: cy + r * Math.sin(endAngle),
+        endHeading: heading + sweep
+      };
+    }
+
+    const a1 = q(0, 0, geometry.baseRotation, geometry.rootRadius, +1, "rgba(255,90,90,.92)");
+    const a2 = q(a1.endX, a1.endY, a1.endHeading, geometry.rootRadius / PHI, +1, "rgba(90,255,90,.92)");
+    const a3 = q(a1.endX, a1.endY, a1.endHeading + Math.PI, geometry.rootRadius / (PHI * PHI), +1, "rgba(75,115,255,.95)");
+
+    const pb = toScreen(a1.endX, a1.endY, scale);
+    const p2 = toScreen(a2.endX, a2.endY, scale);
+    const p3 = toScreen(a3.endX, a3.endY, scale);
+    ctx.beginPath();
+    ctx.moveTo(p2.x, p2.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.lineTo(p3.x, p3.y);
+    ctx.strokeStyle = "rgba(255,235,100,.80)";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawTargetMarker(scale){
+    if(!ui.showTarget.checked) return;
+    const p = toScreen(targetCameraX, targetCameraY, scale);
+    const pulse = 8 + 6 * Math.sin(targetPulse);
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,220,120,.92)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, pulse, 0, TAU);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x - pulse - 8, p.y);
+    ctx.lineTo(p.x - pulse + 2, p.y);
+    ctx.moveTo(p.x + pulse - 2, p.y);
+    ctx.lineTo(p.x + pulse + 8, p.y);
+    ctx.moveTo(p.x, p.y - pulse - 8);
+    ctx.lineTo(p.x, p.y - pulse + 2);
+    ctx.moveTo(p.x, p.y + pulse - 2);
+    ctx.lineTo(p.x, p.y + pulse + 8);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function draw(){
+    updateOutputs();
+
+    const geometry = getGeometry();
+    const zoomPow = elapsed * Number(ui.speed.value);
+    const zoom = Math.pow(PHI, zoomPow);
+    const scale = geometry.baseScale * zoom;
+
+    const settings = {
+      lineWidth: Number(ui.lineWidth.value),
+      minPix: Number(ui.minPix.value),
+      baseDepth: Number(ui.localDepth.value)
+    };
+
+    const visibilityDepth = Math.max(
+      0,
+      Math.ceil(Math.log((geometry.rootRadius * scale) / settings.minPix) / LOG_PHI)
+    );
+
+    const wholePatternCopies = Math.min(
+      28,
+      Math.max(1, Math.ceil(visibilityDepth / 2) + 3)
+    );
+
+    const pacedDepth = settings.baseDepth + Math.floor(zoomPow) + 2;
+    const maxDepth = ui.slowDepth.checked
+      ? Math.min(120, Math.max(settings.baseDepth, Math.min(visibilityDepth + 3, pacedDepth)))
+      : Math.min(120, settings.baseDepth + visibilityDepth + 3);
+
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    ctx.shadowBlur = 7;
+    ctx.shadowColor = ui.rainbow.checked ? "rgba(255,255,255,.20)" : "rgba(220,235,255,.24)";
+
+    let arcsDrawn = 0;
+    let nodesVisited = 0;
+    let nodesCulled = 0;
+    let nodeBudget = 1200000;
+
+    const stack = [];
+    for(let copyIndex = 0; copyIndex < wholePatternCopies; copyIndex++){
+      const copyScalePow = 2 * copyIndex;
+      const copyRadius = geometry.rootRadius / Math.pow(PHI, copyScalePow);
+      for(let i = 0; i < geometry.seedCount; i++){
+        stack.push({
+          x: 0,
+          y: 0,
+          r: copyRadius,
+          heading: geometry.baseRotation + i * geometry.rotStep,
+          chirality: +1,
+          depth: maxDepth,
+          maxDepth: maxDepth,
+          copyIndex
+        });
+      }
+    }
+
+    while(stack.length && nodeBudget > 0){
+      const node = stack.pop();
+      nodesVisited++;
+      nodeBudget--;
+
+      if(node.depth <= 0) continue;
+      if(node.r * scale < settings.minPix) continue;
+
+      if(!subtreeMayReachViewport(node, scale)){
+        nodesCulled++;
+        continue;
+      }
+
+      const arc = getArcGeometry(node, geometry);
+
+      if(arcMayIntersectViewport(node, arc, scale)){
+        drawArc(node, arc, scale, settings, geometry, zoomPow);
+        arcsDrawn++;
+      }
+
+      const continuation = {
+        x: arc.endX,
+        y: arc.endY,
+        r: node.r / PHI,
+        heading: arc.endHeading,
+        chirality: node.chirality,
+        depth: node.depth - 1,
+        maxDepth: node.maxDepth,
+        copyIndex: node.copyIndex || 0
+      };
+
+      const mirrored = {
+        x: arc.endX,
+        y: arc.endY,
+        r: node.r / (PHI * PHI),
+        heading: arc.endHeading + Math.PI,
+        chirality: node.chirality,
+        depth: node.depth - 1,
+        maxDepth: node.maxDepth,
+        copyIndex: node.copyIndex || 0
+      };
+
+      const continuationDistance = Math.hypot(continuation.x - cameraX, continuation.y - cameraY);
+      const mirroredDistance = Math.hypot(mirrored.x - cameraX, mirrored.y - cameraY);
+
+      if(continuationDistance <= mirroredDistance){
+        stack.push(mirrored);
+        stack.push(continuation);
+      }else{
+        stack.push(continuation);
+        stack.push(mirrored);
+      }
+    }
+
+    ctx.shadowBlur = 0;
+
+    if(ui.showGuide.checked){
+      drawGuide(scale, geometry);
+    }
+
+    drawTargetMarker(scale);
+    ctx.restore();
+
+    const rainbowLabel = ui.rainbow.checked ? "rainbow on" : "rainbow off";
+    ui.status.textContent =
+      `${geometry.name} click-zoom mode · ${rainbowLabel} · whole-pattern copies ${wholePatternCopies} · rendered ${arcsDrawn.toLocaleString()} arcs · visited ${nodesVisited.toLocaleString()} nodes · depth ${maxDepth} · zoom φ^${zoomPow.toFixed(2)}.`;
+    if(nodeBudget <= 0){
+      ui.status.textContent += " Node budget reached; closest branches were prioritized.";
+    }else if(nodesCulled > 0){
+      ui.status.textContent += ` Culled ${nodesCulled.toLocaleString()} unreachable subtrees.`;
+    }
+  }
+
+  function tick(now){
+    const dt = Math.min(0.05, (now - lastTime) / 1000);
+    lastTime = now;
+
+    if(!paused) elapsed += dt;
+
+    const follow = 1 - Math.exp(-6 * dt);
+    cameraX += (targetCameraX - cameraX) * follow;
+    cameraY += (targetCameraY - cameraY) * follow;
+    targetPulse += dt * 5;
+
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  function togglePause(){
+    paused = !paused;
+    updateOutputs();
+  }
+
+  function resetPosition(){
+    elapsed = 0;
+    cameraX = 0;
+    cameraY = 0;
+    targetCameraX = 0;
+    targetCameraY = 0;
+    targetPulse = 0;
+    draw();
+  }
+
+  function onModeChange(){
+    resetPosition();
+  }
+
+  ui.minimizeBtn.addEventListener("click", () => {
+    panel.classList.add("minimized");
+    restoreBtn.classList.add("show");
+  });
+
+  restoreBtn.addEventListener("click", () => {
+    panel.classList.remove("minimized");
+    panel.classList.remove("hidden");
+    restoreBtn.classList.remove("show");
+  });
+
+  function supportedMimeType(){
+    if(typeof MediaRecorder === "undefined") return "";
+    const candidates = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm"
+    ];
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
+  }
+
+  function stopRecording(){
+    if(mediaRecorder && mediaRecorder.state !== "inactive"){
+      mediaRecorder.stop();
+    }
+  }
+
+  function toggleRecording(){
+    if(recording){
+      stopRecording();
+      return;
+    }
+
+    if(!canvas.captureStream || typeof MediaRecorder === "undefined"){
+      ui.status.textContent = "Video recording is not supported by this browser.";
+      return;
+    }
+
+    try{
+      const stream = canvas.captureStream(60);
+      const mimeType = supportedMimeType();
+      mediaRecorder = mimeType
+        ? new MediaRecorder(stream, {mimeType})
+        : new MediaRecorder(stream);
+
+      recordedChunks = [];
+
+      mediaRecorder.addEventListener("dataavailable", event => {
+        if(event.data && event.data.size > 0){
+          recordedChunks.push(event.data);
+        }
+      });
+
+      mediaRecorder.addEventListener("stop", () => {
+        const type = mediaRecorder.mimeType || "video/webm";
+        const blob = new Blob(recordedChunks, {type});
+        const url = URL.createObjectURL(blob);
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const mode = getGeometry().sweepDeg;
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `phi_${mode}deg_nested_pattern_click_zoom_${stamp}.webm`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+        recording = false;
+        ui.recordBtn.textContent = "Record video";
+        ui.recordBtn.classList.remove("recording");
+        ui.status.textContent = "Video saved.";
+      });
+
+      mediaRecorder.addEventListener("error", () => {
+        recording = false;
+        ui.recordBtn.textContent = "Record video";
+        ui.recordBtn.classList.remove("recording");
+        ui.status.textContent = "The browser stopped the recording unexpectedly.";
+      });
+
+      mediaRecorder.start(500);
+      recording = true;
+      ui.recordBtn.textContent = "Stop & save";
+      ui.recordBtn.classList.add("recording");
+      ui.status.textContent = "Recording canvas video…";
+    }catch(error){
+      recording = false;
+      ui.recordBtn.textContent = "Record video";
+      ui.recordBtn.classList.remove("recording");
+      ui.status.textContent = `Recording could not start: ${error.message}`;
+    }
+  }
+
+  for(const input of [
+    ui.rainbow, ui.showTarget, ui.speed, ui.localDepth, ui.lineWidth,
+    ui.minPix, ui.showGuide, ui.slowDepth
+  ]){
+    input.addEventListener("input", draw);
+    input.addEventListener("change", draw);
+  }
+
+  ui.spiralMode.addEventListener("input", onModeChange);
+  ui.spiralMode.addEventListener("change", onModeChange);
+
+  ui.playPause.addEventListener("click", togglePause);
+  ui.reset.addEventListener("click", resetPosition);
+  ui.recordBtn.addEventListener("click", toggleRecording);
+
+  canvas.addEventListener("click", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const world = screenToWorld(px, py, currentScale());
+    targetCameraX = world.x;
+    targetCameraY = world.y;
+    targetPulse = 0;
+  });
+
+  addEventListener("keydown", e => {
+    if(e.key === " "){
+      e.preventDefault();
+      togglePause();
+    }
+    if(e.key.toLowerCase() === "h"){
+      panel.classList.toggle("hidden");
+    }
+  });
+
+  addEventListener("resize", resize);
+
+  updateOutputs();
+  resize();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
